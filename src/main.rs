@@ -1,40 +1,76 @@
 use poise::serenity_prelude as serenity;
-use songbird::SerenityInit;
+use reqwest::Client;
+use songbird::input::YoutubeDl;
+use std::sync::Arc;
+
+struct Data {
+    http_client: Arc<Client>,
+}
+
+type Error = Box<dyn std::error::Error + Send + Sync>;
+
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
+    let token = "YOUR_BOT_TOKEN_HERE";
+
     let framework = poise::Framework::builder()
-        .options(poise::FrameworkOptions {
-            commands: vec![play()],
-            ..Default::default()
-        })
-        .token("YOUR_BOT_TOKEN_HERE")
-        .intents(serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::GUILD_VOICE_STATES)
-        .setup(|ctx, ready, framework| {
+        .setup(|_, _, _| {
             Box::pin(async move {
-                println!("{} is connected!", ready.user.name);
+                // construct user data here (invoked when bot connects to Discord)
                 Ok(())
             })
-        });
+        })
+        // Most configuration is done via the `FrameworkOptions` struct, which you can define with
+        // a struct literal (hint: use `..Default::default()` to fill uninitialized
+        // settings with their default value):
+        .options(poise::FrameworkOptions {
+            commands: vec![join(), play()],
+            ..Default::default()
+        })
+        .build();
 
-    framework.run().await.unwrap();
+    let client = serenity::ClientBuilder::new("...", serenity::GatewayIntents::non_privileged())
+        .framework(framework)
+        .await;
+
+    client.unwrap().start().await.unwrap();
 }
 
 #[poise::command(slash_command)]
-async fn play(
-    ctx: poise::Context<'_>,
-    #[description = "YouTube URL"] url: String,
-) -> Result<(), serenity::Error> {
-    let guild_id = ctx.guild_id().ok_or_else(|| serenity::Error::Other("Not in a guild"))?;
+async fn join(ctx: Context<'_>) -> Result<(), Error> {
+    let guild = ctx.guild().ok_or("Failed to get guild")?;
+    let guild_id = guild.id;
+    let user_id = ctx.author().id;
+
+    let voice_state = guild
+        .voice_states
+        .get(&user_id)
+        .ok_or("User is not in a voice channel")?;
+    let channel_id = voice_state
+        .channel_id
+        .ok_or("User is not in a voice channel")?;
+
     let manager = songbird::get(ctx.serenity_context())
         .await
-        .ok_or_else(|| serenity::Error::Other("Songbird Voice client placed in at initialization."))?;
+        .ok_or("Failed to get Songbird manager")?
+        .clone();
 
-    let handler = manager.get(guild_id).ok_or_else(|| serenity::Error::Other("Not in a voice channel"))?;
+    manager.join_gateway(guild_id, channel_id).await?;
+    ctx.say("Joined the voice channel!").await?;
+    Ok(())
+}
 
-    let source = songbird::ytdl(&url).await.map_err(|e| serenity::Error::Other("Error sourcing ffmpeg"))?;
-    handler.lock().await.play_source(source);
+#[poise::command(slash_command)]
+async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap();
+    let manager = songbird::get(ctx.serenity_context()).await.unwrap().clone();
+    let call = manager.get(guild_id).unwrap();
 
-    ctx.say("Playing song").await?;
+    let source = YoutubeDl::new(ctx.data().http_client.clone(), url);
+
+    call.lock().await.enqueue_input(source.into());
+    ctx.say("Now playing!").await?;
     Ok(())
 }
