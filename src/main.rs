@@ -93,11 +93,12 @@ async fn play(
         .clone();
     let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
-    let source = YoutubeDl::new(ctx.data().http_client, url);
+    let source = YoutubeDl::new(ctx.data().http_client.clone(), url);
 
     // call.lock().await.add_global_source("song", source.into())?;
     let a = call.lock().await;
     let b: songbird::Call = (&*a).clone();
+    b.enqueue_source(source.into())?;
     ctx.say("Now playing!").await?;
     Ok(())
 }
