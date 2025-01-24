@@ -44,7 +44,9 @@ async fn main() -> Result<(), Error> {
         })
         .build();
 
-    let intents = serenity::GatewayIntents::non_privileged();
+    let intents = serenity::GatewayIntents::non_privileged()
+        | serenity::GatewayIntents::GUILD_VOICE_STATES
+        | serenity::GatewayIntents::GUILD_MESSAGES;
     let mut client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .status(bot_config_clone.status)
