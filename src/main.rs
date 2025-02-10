@@ -95,10 +95,9 @@ async fn play(
 
     let source = YoutubeDl::new(ctx.data().http_client.clone(), url);
 
-    // call.lock().await.add_global_source("song", source.into())?;
-    let a = call.lock().await;
-    let b: songbird::Call = (&*a).clone();
-    b.enqueue_source(source.into())?;
+    let mut handler = call.lock().await;
+    handler.play_input(source.into());
+
     ctx.say("Now playing!").await?;
     Ok(())
 }
