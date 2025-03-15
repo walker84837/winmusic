@@ -2,6 +2,7 @@ use clap::Parser;
 use log::info;
 use poise::serenity_prelude as serenity;
 use reqwest::Client;
+use songbird::input::AuxMetadata;
 use songbird::input::YoutubeDl;
 use songbird::SerenityInit;
 use std::{path::Path, sync::Arc};
@@ -12,7 +13,7 @@ use crate::{args::Args, config::Config};
 
 struct Data {
     http_client: Client,
-    _config: Arc<Config>,
+    config: Arc<Config>,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -20,9 +21,9 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let args = Args::parse();
-
     env_logger::init();
+
+    let args = Args::parse();
 
     dotenv::dotenv().ok();
     let token = std::env::var("DISCORD_TOKEN").expect(
@@ -96,15 +97,18 @@ async fn play(
         .await
         .ok_or("Failed to get Songbird manager")?
         .clone();
-    info!("Getting Songbird manager");
-    let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
+    info!("Songbird manager acquired");
 
-    info!("Creating YoutubeDl instance");
+    let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
+    info!("Call object retrieved");
+
+    info!("Creating YoutubeDl instance for URL: {}", url);
     let source = YoutubeDl::new(ctx.data().http_client.clone(), url);
 
     info!("Playing input");
     let mut handler = call.lock().await;
     handler.play_input(source.into());
+    info!("Input played successfully");
 
     ctx.say("Now playing!").await?;
     Ok(())
