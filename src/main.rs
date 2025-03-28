@@ -2,15 +2,14 @@ use clap::Parser;
 use log::info;
 use poise::serenity_prelude as serenity;
 use reqwest::Client;
-use songbird::input::AuxMetadata;
-use songbird::input::YoutubeDl;
-use songbird::SerenityInit;
+use songbird::{input::YoutubeDl, SerenityInit};
 use std::{path::Path, sync::Arc};
 
 mod args;
 mod config;
 use crate::{args::Args, config::Config};
 
+#[allow(dead_code)]
 struct Data {
     http_client: Client,
     config: Arc<Config>,
@@ -30,7 +29,7 @@ async fn main() -> Result<(), Error> {
         "Discord bot token missing. Set DISCORD_TOKEN environment variable in your .env file.",
     );
 
-    let bot_config = Arc::new(Config::new(&Path::new(&args.config))?);
+    let bot_config = Arc::new(Config::new(Path::new(&args.config))?);
 
     let bot_config_clone = bot_config.clone();
     let framework = poise::Framework::builder()
@@ -57,6 +56,16 @@ async fn main() -> Result<(), Error> {
         .framework(framework)
         .status(bot_config_clone.status)
         .await?;
+
+    let shard_manager = client.shard_manager.clone();
+    // Spawn a background task to listen for CTRL+C (SIGINT).
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to listen for CTRL+C");
+        info!("CTRL+C received, shutting down gracefully...");
+        shard_manager.shutdown_all().await;
+    });
 
     client.start().await?;
     Ok(())
