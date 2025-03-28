@@ -82,7 +82,7 @@ async fn join(ctx: Context<'_>) -> Result<(), Error> {
         .ok_or("Failed to get Songbird manager")?
         .clone();
 
-    manager.join_gateway(guild_id, channel_id).await?;
+    manager.join(guild_id, channel_id).await?;
     ctx.say("Joined the voice channel!").await?;
     Ok(())
 }
