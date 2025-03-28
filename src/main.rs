@@ -49,9 +49,9 @@ async fn main() -> Result<(), Error> {
         })
         .build();
 
-    let intents = serenity::GatewayIntents::non_privileged()
-        | serenity::GatewayIntents::GUILD_VOICE_STATES
-        | serenity::GatewayIntents::GUILD_MESSAGES;
+    let intents = serenity::GatewayIntents::non_privileged();
+    // | serenity::GatewayIntents::GUILD_VOICE_STATES
+    // | serenity::GatewayIntents::GUILD_MESSAGES;
     let mut client = serenity::ClientBuilder::new(token, intents)
         .register_songbird()
         .framework(framework)
