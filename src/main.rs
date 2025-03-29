@@ -24,7 +24,9 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
 
     let args = Args::parse();
 
@@ -33,7 +35,8 @@ async fn main() -> Result<(), Error> {
         "Discord bot token missing. Set DISCORD_TOKEN environment variable in your .env file.",
     );
 
-    let bot_config = Arc::new(Config::new(Path::new(&args.config))?);
+    let config = Config::new(Path::new(&args.config))?;
+    let bot_config = Arc::new(config);
 
     let bot_config_clone = bot_config.clone();
     let framework = poise::Framework::builder()
@@ -104,7 +107,7 @@ async fn play(
     ctx: Context<'_>,
     #[description = "URL or search query"] input: String,
 ) -> Result<(), Error> {
-    // TODO: defer the interaction to avoid discord marking the app as not having responded
+    ctx.defer().await?;
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
     let manager = songbird::get(ctx.serenity_context())
         .await
@@ -112,7 +115,6 @@ async fn play(
         .clone();
     let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
-    // Determine if input is a URL or search query
     let url = if is_url(&input) {
         input.clone()
     } else {
@@ -132,9 +134,9 @@ async fn play(
     Ok(())
 }
 
-fn is_url(s: &str) -> bool {
-    // TODO: replace with url crate for parsing efficiently
-    s.starts_with("http://") || s.starts_with("https://")
+fn is_url(s: impl AsRef<str>) -> bool {
+    let s = s.as_ref();
+    url::Url::parse(s).is_ok()
 }
 
 #[poise::command(slash_command)]
@@ -181,6 +183,7 @@ async fn pause(ctx: Context<'_>) -> Result<(), Error> {
 
 #[poise::command(slash_command)]
 async fn resume(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer().await?;
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
     let manager = songbird::get(ctx.serenity_context())
         .await
@@ -198,6 +201,7 @@ async fn search(
     ctx: Context<'_>,
     #[description = "Search query"] query: String,
 ) -> Result<(), Error> {
+    ctx.defer().await?;
     let mut yt = YoutubeDl::new_search(ctx.data().http_client.clone(), query);
     let results = yt.search(Some(5)).await?;
 
@@ -205,7 +209,7 @@ async fn search(
     let mut choices = Vec::new();
     for (i, meta) in results.into_iter().enumerate() {
         let title = meta.title.unwrap_or_else(|| "Unknown Title".to_string());
-        let url = meta.source_url.ok_or("No URL found")?;
+        let url = meta.source_url.ok_or_else(|| "No URL found")?;
         choices.push((title.clone(), url.clone()));
         options.push(CreateSelectMenuOption::new(
             format!("{}: {}", i + 1, title),
@@ -233,11 +237,15 @@ async fn search(
             let selected_url = &values[0];
             interaction.defer(ctx.serenity_context()).await?;
 
-            let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
+            let guild_id = ctx
+                .guild_id()
+                .ok_or_else(|| "In this context, the bot isn't in a guild")?;
             let manager = songbird::get(ctx.serenity_context())
                 .await
-                .ok_or("Failed to get Songbird manager")?;
-            let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
+                .ok_or_else(|| "Failed to get Songbird manager")?;
+            let call = manager
+                .get(guild_id)
+                .ok_or_else(|| "Not in a voice channel")?;
 
             let source = YoutubeDl::new(ctx.data().http_client.clone(), selected_url.to_string());
             let input = source.into();
