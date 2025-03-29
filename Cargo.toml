@@ -10,7 +10,7 @@ env_logger = "0.11.6"
 kdl = "6.3.2"
 log = "0.4.25"
 poise = "0.6.1"
-reqwest = "0.11.27"
+reqwest = "0.12.15"
 songbird = { version = "0.5.0", features = ["driver", "builtin-queue"] }
 symphonia = { version = "0.5.4", features = ["all-codecs"] }
 thiserror = "2.0.11"
