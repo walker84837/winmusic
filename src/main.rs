@@ -104,6 +104,7 @@ async fn play(
     ctx: Context<'_>,
     #[description = "URL or search query"] input: String,
 ) -> Result<(), Error> {
+    // TODO: defer the interaction to avoid discord marking the app as not having responded
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
     let manager = songbird::get(ctx.serenity_context())
         .await
@@ -132,6 +133,7 @@ async fn play(
 }
 
 fn is_url(s: &str) -> bool {
+    // TODO: replace with url crate for parsing efficiently
     s.starts_with("http://") || s.starts_with("https://")
 }
 
