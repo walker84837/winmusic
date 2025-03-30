@@ -1,4 +1,5 @@
 use clap::Parser;
+use dashmap::DashMap;
 use log::info;
 use poise::serenity_prelude as serenity;
 use reqwest::Client;
@@ -30,7 +31,7 @@ async fn main() -> Result<(), Error> {
     let bot_config_clone = bot_config.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![join(), play(), skip(), stop(), pause(), resume()],
+            commands: vec![join(), play(), skip(), stop(), pause(), resume(), status()],
             ..Default::default()
         })
         .setup(move |ctx, _ready, framework| {
@@ -39,6 +40,7 @@ async fn main() -> Result<(), Error> {
                 Ok(Data {
                     http_client: Client::new(),
                     config: bot_config,
+                    data: DashMap::new(),
                 })
             })
         })

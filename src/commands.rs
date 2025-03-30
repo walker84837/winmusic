@@ -4,7 +4,7 @@ use serenity::{
     ComponentInteractionDataKind, CreateActionRow, CreateSelectMenu, CreateSelectMenuKind,
     CreateSelectMenuOption,
 };
-use songbird::input::YoutubeDl;
+use songbird::input::{Compose, YoutubeDl};
 
 #[poise::command(slash_command)]
 pub async fn join(ctx: Context<'_>) -> Result<(), Error> {
@@ -44,6 +44,7 @@ pub async fn play(
         .clone();
     let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
+    // Determine whether the input is a URL or a search query
     let url = if is_url(&input) {
         input.clone()
     } else {
@@ -53,13 +54,21 @@ pub async fn play(
         result.source_url.ok_or("Result has no URL")?
     };
 
-    let source = YoutubeDl::new(ctx.data().http_client.clone(), url);
-    let input = source.into();
+    let mut source = YoutubeDl::new(ctx.data().http_client.clone(), url.clone());
+    let aux_meta = source.aux_metadata().await?;
+    let track_title = aux_meta
+        .title
+        .clone()
+        .unwrap_or_else(|| "Unknown Title".to_string());
 
+    let input_source = source.into();
     let mut handler = call.lock().await;
-    handler.enqueue_input(input).await;
+    let track_handle = handler.enqueue_input(input_source).await;
 
-    ctx.say("Added to queue!").await?;
+    let uuid = track_handle.uuid();
+    ctx.data().data.insert(uuid, aux_meta);
+
+    ctx.say(format!("Now playing: {}", track_title)).await?;
     Ok(())
 }
 
@@ -189,4 +198,50 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), Error> {
 fn is_url(s: impl AsRef<str>) -> bool {
     let s = s.as_ref();
     url::Url::parse(s).is_ok()
+}
+
+#[poise::command(slash_command)]
+pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .ok_or("Failed to get Songbird manager")?;
+    let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
+    let handler = call.lock().await;
+    let queue = handler.queue();
+
+    let mut response = String::new();
+
+    if let Some(current) = handler.queue().current() {
+        let uuid = current.uuid();
+        let title = ctx
+            .data()
+            .data
+            .get(&uuid)
+            .and_then(|m| m.title.clone()) // Cloned the title
+            .unwrap_or_else(|| "Unknown Title".to_string());
+        response.push_str(&format!("**Now Playing:** {}\n", title));
+    } else {
+        response.push_str("No track is currently playing.\n");
+    }
+
+    let upcoming = queue.current_queue();
+    if upcoming.is_empty() {
+        response.push_str("The queue is empty.");
+    } else {
+        response.push_str("**Upcoming Tracks:**\n");
+        for (i, track) in upcoming.iter().enumerate() {
+            let uuid = track.uuid();
+            let title = ctx
+                .data()
+                .data
+                .get(&uuid)
+                .and_then(|m| m.title.clone()) // Cloned the title
+                .unwrap_or_else(|| "Unknown Title".to_string());
+            response.push_str(&format!("{}. {}\n", i + 1, title));
+        }
+    }
+
+    ctx.say(response).await?;
+    Ok(())
 }
