@@ -133,7 +133,7 @@ pub async fn search(
     let mut choices = Vec::new();
     for (i, meta) in results.into_iter().enumerate() {
         let title = meta.title.unwrap_or_else(|| "Unknown Title".to_string());
-        let url = meta.source_url.ok_or_else(|| "No URL found")?;
+        let url = meta.source_url.ok_or("No URL found")?;
         choices.push((title.clone(), url.clone()));
         options.push(CreateSelectMenuOption::new(
             format!("{}: {}", i + 1, title),
@@ -163,13 +163,13 @@ pub async fn search(
 
             let guild_id = ctx
                 .guild_id()
-                .ok_or_else(|| "In this context, the bot isn't in a guild")?;
+                .ok_or("In this context, the bot isn't in a guild")?;
             let manager = songbird::get(ctx.serenity_context())
                 .await
-                .ok_or_else(|| "Failed to get Songbird manager")?;
+                .ok_or("Failed to get Songbird manager")?;
             let call = manager
                 .get(guild_id)
-                .ok_or_else(|| "Not in a voice channel")?;
+                .ok_or("Not in a voice channel")?;
 
             let source = YoutubeDl::new(ctx.data().http_client.clone(), selected_url.to_string());
             let input = source.into();
