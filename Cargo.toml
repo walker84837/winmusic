@@ -5,13 +5,16 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }
+dashmap = "6.1.0"
 dotenv = "0.15.0"
 env_logger = "0.11.6"
 kdl = "6.3.2"
 log = "0.4.25"
 poise = "0.6.1"
-reqwest = "0.11.27"
-songbird = { version = "0.4.6", features = ["driver"] }
+reqwest = "0.12.15"
+songbird = { version = "0.5.0", features = ["driver", "builtin-queue"] }
 symphonia = { version = "0.5.4", features = ["all-codecs"] }
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
+url = "2.5.4"
+uuid = "1.16.0"

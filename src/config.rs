@@ -1,8 +1,7 @@
 use kdl::{KdlDocument, KdlValue};
 use poise::serenity_prelude as serenity;
 use serenity::model::user::OnlineStatus;
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -43,5 +42,13 @@ impl Config {
         };
 
         Ok(Config { status })
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            status: OnlineStatus::Online,
+        }
     }
 }
