@@ -6,6 +6,7 @@ use serenity::{
 };
 use songbird::input::{Compose, YoutubeDl};
 
+/// Joins the user's voice channel
 #[poise::command(slash_command)]
 pub async fn join(ctx: Context<'_>) -> Result<(), Error> {
     let guild = ctx.guild().ok_or("Failed to get guild")?.clone();
@@ -31,6 +32,7 @@ pub async fn join(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Plays a track and adds it to the queue
 #[poise::command(slash_command)]
 pub async fn play(
     ctx: Context<'_>,
@@ -72,6 +74,7 @@ pub async fn play(
     Ok(())
 }
 
+/// Skips the current track, and plays the next track
 #[poise::command(slash_command)]
 pub async fn skip(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
@@ -86,6 +89,7 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Pauses the current track
 #[poise::command(slash_command)]
 pub async fn pause(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
@@ -100,6 +104,7 @@ pub async fn pause(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Stops the current track, and clears the queue
 #[poise::command(slash_command)]
 pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;
@@ -114,6 +119,7 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Search for a track on YouTube
 #[poise::command(slash_command)]
 pub async fn search(
     ctx: Context<'_>,
@@ -180,6 +186,7 @@ pub async fn search(
     Ok(())
 }
 
+/// Resumes the current track
 #[poise::command(slash_command)]
 pub async fn resume(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
@@ -196,10 +203,10 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 fn is_url(s: impl AsRef<str>) -> bool {
-    let s = s.as_ref();
-    url::Url::parse(s).is_ok()
+    url::Url::parse(s.as_ref()).is_ok()
 }
 
+/// Displays the current playback status, including the queue
 #[poise::command(slash_command)]
 pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or("Failed to get guild ID")?;

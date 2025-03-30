@@ -31,7 +31,16 @@ async fn main() -> Result<(), Error> {
     let bot_config_clone = bot_config.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![join(), play(), skip(), stop(), pause(), resume(), status()],
+            commands: vec![
+                join(),
+                play(),
+                skip(),
+                stop(),
+                pause(),
+                resume(),
+                status(),
+                search(),
+            ],
             ..Default::default()
         })
         .setup(move |ctx, _ready, framework| {
