@@ -3,6 +3,15 @@ name = "winmusic"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+debug = false
+
+[profile.release]
+strip = true
+lto = true
+overflow-checks = true
+panic = "abort"
+
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }
 dashmap = "6.1.0"
