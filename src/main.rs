@@ -33,6 +33,7 @@ async fn main() -> Result<(), Error> {
         .options(poise::FrameworkOptions {
             commands: vec![
                 join(),
+                leave(),
                 play(),
                 skip(),
                 stop(),
