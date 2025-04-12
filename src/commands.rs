@@ -167,9 +167,7 @@ pub async fn search(
             let manager = songbird::get(ctx.serenity_context())
                 .await
                 .ok_or("Failed to get Songbird manager")?;
-            let call = manager
-                .get(guild_id)
-                .ok_or("Not in a voice channel")?;
+            let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
             let source = YoutubeDl::new(ctx.data().http_client.clone(), selected_url.to_string());
             let input = source.into();
@@ -204,6 +202,14 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), Error> {
 
 fn is_url(s: impl AsRef<str>) -> bool {
     url::Url::parse(s.as_ref()).is_ok()
+}
+
+/// Play a Spotify playlist from url
+#[poise::command(slash_command)]
+pub async fn splaylist(ctx: Context<'_>, query: String) -> Result<(), Error> {
+    // make get request of playlist contents then search for youtube links then add to db i guess
+    // :P
+    Ok(())
 }
 
 /// Displays the current playback status, including the queue
