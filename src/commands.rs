@@ -167,9 +167,7 @@ pub async fn search(
             let manager = songbird::get(ctx.serenity_context())
                 .await
                 .ok_or("Failed to get Songbird manager")?;
-            let call = manager
-                .get(guild_id)
-                .ok_or("Not in a voice channel")?;
+            let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
             let source = YoutubeDl::new(ctx.data().http_client.clone(), selected_url.to_string());
             let input = source.into();
@@ -243,12 +241,29 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
                 .data()
                 .data
                 .get(&uuid)
-                .and_then(|m| m.title.clone()) // Cloned the title
+                .and_then(|m| m.title.clone())
                 .unwrap_or_else(|| "Unknown Title".to_string());
             response.push_str(&format!("{}. {}\n", i + 1, title));
         }
     }
 
     ctx.say(response).await?;
+    Ok(())
+}
+
+/// Leaves the user's voice channel
+#[poise::command(slash_command)]
+pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
+    let guild = ctx.guild().ok_or("Failed to get guild")?.clone();
+    let guild_id = guild.id;
+    // let user_id = ctx.author().id;
+
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .ok_or("Failed to get Songbird manager")?
+        .clone();
+
+    manager.leave(guild_id).await?;
+    ctx.say("Joined the voice channel!").await?;
     Ok(())
 }
