@@ -19,6 +19,8 @@ pub struct Config {
     pub status: OnlineStatus,
     pub db_url: String,
     pub db_pool_size: u32,
+    pub spotify_client_id: String,
+    pub spotify_client_secret: String,
 }
 
 impl Config {
@@ -57,11 +59,26 @@ impl Config {
             .get("pool_size")
             .and_then(KdlValue::as_integer)
             .ok_or(LoadConfigError::InvalidConfig)? as u32;
+        let spotify_node = kdl_doc
+            .get("spotify")
+            .ok_or(LoadConfigError::InvalidConfig)?;
+        let spotify_client_id = spotify_node
+            .get("client_id")
+            .and_then(KdlValue::as_string)
+            .ok_or(LoadConfigError::InvalidConfig)?
+            .to_string();
+        let spotify_client_secret = spotify_node
+            .get("client_secret")
+            .and_then(KdlValue::as_string)
+            .ok_or(LoadConfigError::InvalidConfig)?
+            .to_string();
 
         Ok(Config {
             status,
             db_url,
             db_pool_size,
+            spotify_client_id,
+            spotify_client_secret,
         })
     }
 }
@@ -72,6 +89,8 @@ impl Default for Config {
             status: OnlineStatus::Online,
             db_url: "postgres://user:password@localhost/winmusic".to_string(),
             db_pool_size: 5,
+            spotify_client_id: "".to_string(),
+            spotify_client_secret: "".to_string(),
         }
     }
 }

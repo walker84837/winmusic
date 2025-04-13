@@ -5,6 +5,11 @@ use serenity::{
     CreateSelectMenuOption,
 };
 use songbird::input::{Compose, YoutubeDl};
+use spotify_rs::{
+    ClientCredsFlow,
+    auth::{NoVerifier, Token},
+    client::Client,
+};
 
 pub struct SpotifyTrack {
     pub name: String,
@@ -37,6 +42,22 @@ pub async fn join(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Leaves the user's voice channel
+#[poise::command(slash_command)]
+pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
+    let guild = ctx.guild().ok_or("Failed to get guild")?.clone();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .ok_or("Failed to get Songbird manager")?
+        .clone();
+
+    manager.leave(guild_id).await?;
+    ctx.say("Joined the voice channel!").await?;
+    Ok(())
+}
+
 /// Plays a track and adds it to the queue
 #[poise::command(slash_command)]
 pub async fn play(
@@ -51,7 +72,6 @@ pub async fn play(
         .clone();
     let call = manager.get(guild_id).ok_or("Not in a voice channel")?;
 
-    // Determine whether the input is a URL or a search query
     let url = if is_url(&input) {
         input.clone()
     } else {
@@ -209,8 +229,65 @@ fn is_url(s: impl AsRef<str>) -> bool {
     url::Url::parse(s.as_ref()).is_ok()
 }
 
-async fn fetch_spotify_playlist_tracks(playlist_url: &str) -> Result<Vec<SpotifyTrack>, Error> {
-    todo!("Fetch tracks from Spotify: {}", playlist_url)
+fn extract_playlist_id(url: &str) -> Result<&str, Error> {
+    let uri_parts: Vec<&str> = url.split(':').collect();
+
+    if uri_parts.len() == 3 && uri_parts[0] == "spotify" && uri_parts[1] == "playlist" {
+        return Ok(uri_parts[2]);
+    }
+
+    let path_segments: Vec<&str> = url.split('/').collect();
+
+    if let Some(index) = path_segments.iter().position(|&s| s == "playlist") {
+        if let Some(id) = path_segments.get(index + 1) {
+            let id = id.split('?').next().unwrap_or(id);
+            return Ok(id);
+        }
+    }
+
+    Err("Invalid Spotify playlist URL".into())
+}
+
+// commands.rs
+async fn fetch_spotify_playlist_tracks(
+    spotify_client: &mut Client<Token, ClientCredsFlow, NoVerifier>,
+    playlist_url: &str,
+) -> Result<Vec<SpotifyTrack>, Error> {
+    let playlist_id = extract_playlist_id(playlist_url)?;
+
+    let mut offset = 0;
+    let limit = 100;
+    let mut tracks = Vec::new();
+
+    loop {
+        let page = spotify_client
+            .playlist_items(&*playlist_id)
+            .limit(limit)
+            .offset(offset)
+            .get()
+            .await?;
+
+        for item in page.items {
+            if let Some(track_ref) = item.track {
+                if let Some(track) = track_ref.as_track() {
+                    let name = track.name;
+                    let artist = track
+                        .artists
+                        .first()
+                        .map(|a| a.name.clone())
+                        .unwrap_or_else(|| "Unknown Artist".to_string());
+                    tracks.push(SpotifyTrack { name, artist });
+                }
+            }
+        }
+
+        if page.next.is_none() {
+            break;
+        }
+        offset += limit;
+    }
+
+    Ok(tracks)
 }
 
 /// Play a playlist from a URL (Spotify or YouTube)
@@ -229,12 +306,18 @@ pub async fn playlist(
     let is_spotify = |url: &str| url.contains("spotify");
 
     if is_spotify(&query) {
-        // Use spotify-rs (or a similar library) to fetch the playlist tracks.
-        let spotify_tracks = fetch_spotify_playlist_tracks(&query).await?;
+        let playlist_id = extract_playlist_id(&query)?;
+        let mut spotify_client = ctx.data().spotify_client.lock().await;
+        let tracks = fetch_spotify_playlist_tracks(&mut *spotify_client, &query).await?;
+
+        ctx.data()
+            .database
+            .add_playlist_tracks(playlist_id, &tracks)
+            .await?;
 
         // For each Spotify track, build a search query and try to get the YouTube URL.
         let mut enqueued_tracks = 0;
-        for track in spotify_tracks {
+        for track in tracks {
             let search_query = format!("{} {}", track.name, track.artist);
             let mut yt = YoutubeDl::new_search(ctx.data().http_client.clone(), search_query);
             let results = yt.search(Some(1)).await?;
