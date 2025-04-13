@@ -17,6 +17,8 @@ pub enum LoadConfigError {
 #[derive(Clone)]
 pub struct Config {
     pub status: OnlineStatus,
+    pub db_url: String,
+    pub db_pool_size: u32,
 }
 
 impl Config {
@@ -27,6 +29,7 @@ impl Config {
     }
 
     fn parse_config(kdl_doc: &KdlDocument) -> Result<Self, LoadConfigError> {
+        // Get misc node for bot status
         let misc_node = kdl_doc.get("misc").ok_or(LoadConfigError::InvalidConfig)?;
         let status_value = misc_node
             .get("status")
@@ -41,7 +44,25 @@ impl Config {
             _ => return Err(LoadConfigError::InvalidConfig),
         };
 
-        Ok(Config { status })
+        // Get database node for connection details
+        let db_node = kdl_doc
+            .get("database")
+            .ok_or(LoadConfigError::InvalidConfig)?;
+        let db_url = db_node
+            .get("url")
+            .and_then(KdlValue::as_string)
+            .ok_or(LoadConfigError::InvalidConfig)?
+            .to_string();
+        let db_pool_size = db_node
+            .get("pool_size")
+            .and_then(KdlValue::as_integer)
+            .ok_or(LoadConfigError::InvalidConfig)? as u32;
+
+        Ok(Config {
+            status,
+            db_url,
+            db_pool_size,
+        })
     }
 }
 
@@ -49,6 +70,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             status: OnlineStatus::Online,
+            db_url: "postgres://user:password@localhost/winmusic".to_string(),
+            db_pool_size: 5,
         }
     }
 }

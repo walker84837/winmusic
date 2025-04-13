@@ -1,14 +1,13 @@
 use clap::Parser;
-use dashmap::DashMap;
 use log::info;
 use poise::serenity_prelude as serenity;
-use reqwest::Client;
 use songbird::SerenityInit;
 use std::{path::Path, sync::Arc};
 
 mod args;
 mod commands;
 mod config;
+mod db;
 mod types;
 use crate::{args::Args, commands::*, config::Config, types::*};
 
@@ -25,10 +24,9 @@ async fn main() -> Result<(), Error> {
         "Discord bot token missing. Set DISCORD_TOKEN environment variable in your .env file.",
     );
 
-    let config = Config::new(Path::new(&args.config))?;
-    let bot_config = Arc::new(config);
+    let config = Arc::new(Config::new(Path::new(&args.config))?);
+    let config_for_setup = config.clone();
 
-    let bot_config_clone = bot_config.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
@@ -40,17 +38,14 @@ async fn main() -> Result<(), Error> {
                 resume(),
                 status(),
                 search(),
+                playlist(),
             ],
             ..Default::default()
         })
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {
-                    http_client: Client::new(),
-                    config: bot_config,
-                    data: DashMap::new(),
-                })
+                Ok(Data::new(config_for_setup.clone()).await?)
             })
         })
         .build();
@@ -60,7 +55,7 @@ async fn main() -> Result<(), Error> {
     let mut client = serenity::ClientBuilder::new(token, intents)
         .register_songbird()
         .framework(framework)
-        .status(bot_config_clone.status)
+        .status(config.status)
         .await?;
 
     let shard_manager = client.shard_manager.clone();

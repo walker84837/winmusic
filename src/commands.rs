@@ -6,6 +6,11 @@ use serenity::{
 };
 use songbird::input::{Compose, YoutubeDl};
 
+pub struct SpotifyTrack {
+    pub name: String,
+    pub artist: String,
+}
+
 /// Joins the user's voice channel
 #[poise::command(slash_command)]
 pub async fn join(ctx: Context<'_>) -> Result<(), Error> {
@@ -204,11 +209,60 @@ fn is_url(s: impl AsRef<str>) -> bool {
     url::Url::parse(s.as_ref()).is_ok()
 }
 
-/// Play a Spotify playlist from url
+async fn fetch_spotify_playlist_tracks(playlist_url: &str) -> Result<Vec<SpotifyTrack>, Error> {
+    todo!("Fetch tracks from Spotify: {}", playlist_url)
+}
+
+/// Play a playlist from a URL (Spotify or YouTube)
 #[poise::command(slash_command)]
-pub async fn splaylist(ctx: Context<'_>, query: String) -> Result<(), Error> {
-    // make get request of playlist contents then search for youtube links then add to db i guess
-    // :P
+pub async fn playlist(
+    ctx: Context<'_>,
+    #[description = "Playlist URL"] query: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+
+    if !is_url(&query) {
+        return Err("Invalid URL".into());
+    }
+
+    let is_youtube = |url: &str| url.contains("youtube") || url.contains("youtu.be");
+    let is_spotify = |url: &str| url.contains("spotify");
+
+    if is_spotify(&query) {
+        // Use spotify-rs (or a similar library) to fetch the playlist tracks.
+        let spotify_tracks = fetch_spotify_playlist_tracks(&query).await?;
+
+        // For each Spotify track, build a search query and try to get the YouTube URL.
+        let mut enqueued_tracks = 0;
+        for track in spotify_tracks {
+            let search_query = format!("{} {}", track.name, track.artist);
+            let mut yt = YoutubeDl::new_search(ctx.data().http_client.clone(), search_query);
+            let results = yt.search(Some(1)).await?;
+            if let Some(result) = results.into_iter().next() {
+                let yt_url = result.source_url.ok_or("No source URL found")?;
+                // ...
+                enqueued_tracks += 1;
+                ctx.say(format!(
+                    "Enqueued track: {} by {} (from {})",
+                    track.name, track.artist, yt_url
+                ))
+                .await?;
+            } else {
+                ctx.say(format!(
+                    "No YouTube result for: {} by {}",
+                    track.name, track.artist
+                ))
+                .await?;
+            }
+        }
+        ctx.say(format!("Total tracks enqueued: {}", enqueued_tracks))
+            .await?;
+    } else if is_youtube(&query) {
+        todo!("Allow providing a YouTube playlist directly");
+    } else {
+        return Err("URL must be a valid Spotify or YouTube playlist URL".into());
+    }
+
     Ok(())
 }
 
@@ -231,7 +285,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
             .data()
             .data
             .get(&uuid)
-            .and_then(|m| m.title.clone()) // Cloned the title
+            .and_then(|m| m.title.clone())
             .unwrap_or_else(|| "Unknown Title".to_string());
         response.push_str(&format!("**Now Playing:** {}\n", title));
     } else {
@@ -249,7 +303,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
                 .data()
                 .data
                 .get(&uuid)
-                .and_then(|m| m.title.clone()) // Cloned the title
+                .and_then(|m| m.title.clone())
                 .unwrap_or_else(|| "Unknown Title".to_string());
             response.push_str(&format!("{}. {}\n", i + 1, title));
         }
