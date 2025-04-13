@@ -4,12 +4,15 @@ use serenity::{
     ComponentInteractionDataKind, CreateActionRow, CreateSelectMenu, CreateSelectMenuKind,
     CreateSelectMenuOption,
 };
-use songbird::input::{Compose, YoutubeDl};
+use songbird::input::{AuxMetadata, Compose, YoutubeDl};
 use spotify_rs::{
     ClientCredsFlow,
     auth::{NoVerifier, Token},
     client::Client,
+    model::PlayableItem::Track,
 };
+use std::time::Duration;
+use tokio::process::Command;
 
 pub struct SpotifyTrack {
     pub name: String,
@@ -248,7 +251,6 @@ fn extract_playlist_id(url: &str) -> Result<&str, Error> {
     Err("Invalid Spotify playlist URL".into())
 }
 
-// commands.rs
 async fn fetch_spotify_playlist_tracks(
     spotify_client: &mut Client<Token, ClientCredsFlow, NoVerifier>,
     playlist_url: &str,
@@ -268,16 +270,14 @@ async fn fetch_spotify_playlist_tracks(
             .await?;
 
         for item in page.items {
-            if let Some(track_ref) = item.track {
-                if let Some(track) = track_ref.as_track() {
-                    let name = track.name;
-                    let artist = track
-                        .artists
-                        .first()
-                        .map(|a| a.name.clone())
-                        .unwrap_or_else(|| "Unknown Artist".to_string());
-                    tracks.push(SpotifyTrack { name, artist });
-                }
+            if let Track(track) = item.track {
+                let name = track.name;
+                let artist = track
+                    .artists
+                    .first()
+                    .map(|a| a.name.clone())
+                    .unwrap_or_else(|| "Unknown Artist".to_string());
+                tracks.push(SpotifyTrack { name, artist });
             }
         }
 
@@ -288,6 +288,71 @@ async fn fetch_spotify_playlist_tracks(
     }
 
     Ok(tracks)
+}
+
+async fn fetch_playlist_videos(playlist: impl AsRef<str>) -> Result<Vec<AuxMetadata>, Error> {
+    let output = Command::new("yt-dlp")
+        .args(&["--flat-playlist", "-j", playlist.as_ref()])
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("yt-dlp error: {}", stderr).into());
+    }
+
+    let mut metadata_list = Vec::new();
+
+    // Process each JSON entry in the output
+    for line in output
+        .stdout
+        .split(|&b| b == b'\n')
+        .filter(|l| !l.is_empty())
+    {
+        let entry: serde_json::Value = serde_json::from_slice(line)?;
+
+        // Extract relevant fields from JSON response
+        let title = entry
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let url = entry
+            .get("url")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let duration = entry
+            .get("duration")
+            .and_then(|v| v.as_f64())
+            .map(|d| Duration::from_secs_f64(d));
+
+        let channel = entry
+            .get("channel")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let thumbnail = entry
+            .get("thumbnails")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.last())
+            .and_then(|thumb| thumb.get("url"))
+            .and_then(|url| url.as_str())
+            .map(|s| s.to_string());
+
+        let mut meta = AuxMetadata::default();
+        meta.title = title;
+        meta.source_url = url;
+        meta.duration = duration;
+        meta.channel = channel.clone();
+        meta.artist = channel;
+        meta.thumbnail = thumbnail;
+        meta.start_time = Some(Duration::from_secs(0));
+
+        metadata_list.push(meta);
+    }
+
+    Ok(metadata_list)
 }
 
 /// Play a playlist from a URL (Spotify or YouTube)
@@ -323,7 +388,8 @@ pub async fn playlist(
             let results = yt.search(Some(1)).await?;
             if let Some(result) = results.into_iter().next() {
                 let yt_url = result.source_url.ok_or("No source URL found")?;
-                // ...
+
+                // Enqueue the track
                 enqueued_tracks += 1;
                 ctx.say(format!(
                     "Enqueued track: {} by {} (from {})",
@@ -341,9 +407,10 @@ pub async fn playlist(
         ctx.say(format!("Total tracks enqueued: {}", enqueued_tracks))
             .await?;
     } else if is_youtube(&query) {
-        todo!("Allow providing a YouTube playlist directly");
-    } else {
-        return Err("URL must be a valid Spotify or YouTube playlist URL".into());
+        let videos = fetch_playlist_videos(&query).await?;
+        for video in videos {
+            println!("{:#?}", video);
+        }
     }
 
     Ok(())
