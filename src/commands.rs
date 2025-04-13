@@ -204,6 +204,14 @@ fn is_url(s: impl AsRef<str>) -> bool {
     url::Url::parse(s.as_ref()).is_ok()
 }
 
+/// Play a Spotify playlist from url
+#[poise::command(slash_command)]
+pub async fn splaylist(ctx: Context<'_>, query: String) -> Result<(), Error> {
+    // make get request of playlist contents then search for youtube links then add to db i guess
+    // :P
+    Ok(())
+}
+
 /// Displays the current playback status, including the queue
 #[poise::command(slash_command)]
 pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
